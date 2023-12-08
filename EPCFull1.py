@@ -88,15 +88,16 @@ def run_model():
 	
 	# Load EPC Valid datasets from BigQuery and create table
 	epc_valid = client.query(sql).result().to_dataframe()
-	destination_table = f"{client.project}.{DATASET_ID}.EPCValid"
-	payload = client.load_table_from_dataframe(epc_valid, destination_table)
-	payload.result()
+	epc_valid_table = f"{client.project}.{DATASET_ID}.EPCValid"
+	job_config = bigquery.LoadJobConfig(write_disposition=bigquery.WriteDisposition.WRITE_EMPTY, autodetect=True)
+	epc_validpayload = client.load_table_from_dataframe(epc_valid, epc_valid_table, job_config=job_config)
+	epc_validpayload.result()
 
 	# Load EPC Invalid datasets from BigQuery and create table
 	epc_invalid = client.query(sql1).result().to_dataframe()
-	destination_table1 = f"{client.project}.{DATASET_ID}.EPCInvalid"
-	payload1 = client.load_table_from_dataframe(epc_invalid, destination_table1)
-	payload1.result()
+	epc_invalid_table = f"{client.project}.{DATASET_ID}.EPCInvalid"
+	epc_invalidpayload = client.load_table_from_dataframe(epc_invalid, epc_invalid_table, job_config=job_config)
+	epc_invalidpayload.result()
 
 	# Split datasets into training and validation datasets
 	X = epc_valid.drop(columns=['co2_emissions_current'])
@@ -159,19 +160,18 @@ def run_model():
 	})
 	
 	# Export MSE and R2 to BigQuery
-	destination_table1 = "Vertex.EPCEvaluation"
-	job_config = bigquery.LoadJobConfig(write_disposition=bigquery.WriteDisposition.WRITE_APPEND, autodetect=True)
-	payload1 = client.load_table_from_dataframe(scores_df, destination_table1, job_config=job_config)
-	payload1.result()
+	validation_table = "Vertex.EPCEvaluation"
+	validationpayload = client.load_table_from_dataframe(scores_df, validation_table, job_config=job_config)
+	validationpayload.result()
 	
 	# Predict on EPC Invalid
 	epc_invalid_transformed = preprocessor.transform(epc_invalid.drop(columns=['co2_emissions_current']))
 	epc_invalid['co2_emissions_predicted'] = best_rf.predict(epc_invalid_transformed)
 	
 	# Export predictions to BigQuery
-	destination_table = "Vertex.EPCInvalidFixed1"
-	payload = client.load_table_from_dataframe(epc_invalid, destination_table)
-	payload.result()
+	ml_table = "Vertex.EPCInvalidFixed1"
+	mlpayload = client.load_table_from_dataframe(epc_invalid, ml_table, job_config=job_config)
+	mlpayload.result()
 	
 	# Return a response
 	return jsonify({"message": "ML model execution complete", "MSE": mse, "R2_Score": r2})
